@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IWorldID} from "./interface/IWorldID.sol";
 import {IBallot} from "./ballots/interface/IBallot.sol";
 import {IResultCalculator} from "./resultCalculators/interface/IResultCalculator.sol";
-import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {Initializable} from "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
 import {ByteHasher} from "./helpers/ByteHasher.sol";
 
 /**
@@ -17,14 +16,11 @@ import {ByteHasher} from "./helpers/ByteHasher.sol";
  * @notice Cross - chain voting is not yet implemented
  */
 contract Election is Initializable {
-    //////////////////
-    // Errors      ///
-    //////////////////
-
+    // errors
     error Election_UnauthorizedDeployment(address factoryAddress);
     error Election_NotOwner();
     error Election_InvalidVoteArrayLength();
-    error Election_UserHasAlreadyVoted(uint256 nullifierHash);
+    error Election_UserHasAlreadyVoted();
     error Election_VotesUnavailable();
     error Election_BallotIsNotIntialized();
     error Election_ElectionInactive();
@@ -35,10 +31,14 @@ contract Election is Initializable {
     error Election_CandidateAlreadyRemoved(uint256 candidateId);
     error Election_ResultsHaveAlreadyBeenDeclared(uint256[] winners);
 
-    ////////////////////////////
-    // Types Declarations    ///
-    ////////////////////////////
+    // events
+    event AddCandidate(string indexed name, string indexed description);
+    event RemoveCandidate(uint256 indexed candidateId);
+    event CastVote(address indexed voter);
+    event CalculateFinalResult();
+    event EndElection();
 
+    // types
     using ByteHasher for bytes;
 
     struct ElectionInfo {
@@ -55,15 +55,10 @@ contract Election is Initializable {
         string description;
     }
 
-    ////////////////////////
-    // State Variables   ///
-    ////////////////////////
+    // state variables
 
-    // WorldID variables
-
-    IWorldID private worldId;
-    uint256 private externalNullifierHash;
     mapping(uint256 => bool) internal nullifierHashes;
+    mapping(address => bool) public isWhitelisted;
 
     IBallot private ballot;
     IResultCalculator private resultCalculator;
@@ -79,24 +74,12 @@ contract Election is Initializable {
     uint8 public resultType;
     uint256 public totalVoters;
 
+    bool private isPrivate;
     bool private isElectionEnded;
     bool private isResultsDeclared;
     bool private isBallotInitialized;
 
-    //////////////
-    // Events  ///
-    //////////////
-
-    event AddCandidate(string indexed name, string indexed description);
-    event RemoveCandidate(uint256 indexed candidateId);
-    event CastVote(address indexed voter);
-    event CalculateFinalResult();
-    event EndElection();
-
-    //////////////////
-    // Modifiers   ///
-    //////////////////
-
+    // modifiers
     modifier onlyOwner() {
         if (msg.sender != owner) revert Election_NotOwner();
         _;
@@ -121,18 +104,9 @@ contract Election is Initializable {
         _;
     }
 
-    //////////////////
-    // Functions   ///
-    //////////////////
-
-    ///////////////////////////
-    // External Functions   ///
-    ///////////////////////////
-
+    // intializer
     function initialize(
-        IWorldID _worldId,
-        string memory _appId,
-        string memory _action,
+        bool _isPrivate,
         address _factoryAddress,
         address _owner,
         ElectionInfo memory _electionInfo,
@@ -143,9 +117,7 @@ contract Election is Initializable {
     ) external initializer {
         if (_factoryAddress != msg.sender) revert Election_UnauthorizedDeployment(_factoryAddress);
 
-        worldId = _worldId;
-        externalNullifierHash = abi.encodePacked(abi.encodePacked(_appId).hashToField(), _action).hashToField();
-
+        isPrivate = _isPrivate;
         electionInfo = _electionInfo;
 
         for (uint256 i = 0; i < _candidates.length; i++) {
@@ -159,19 +131,16 @@ contract Election is Initializable {
         resultCalculator = IResultCalculator(_resultCalculator);
     }
 
-    function userVote(uint256[] memory voteArr, uint256 root, uint256 nullifierHash, uint256[8] calldata proof)
+    // core functions
+    function userVote(uint256[] memory voteArr, uint256 nullifierHash)
         external
         electionInactiveCheck
         electionEndedCheck
     {
         if (voteArr.length > candidates.length) revert Election_InvalidVoteArrayLength();
         if (nullifierHashes[nullifierHash]) {
-            revert Election_UserHasAlreadyVoted(nullifierHash);
+            revert Election_UserHasAlreadyVoted();
         }
-
-        uint256 signalHash = abi.encodePacked(msg.sender).hashToField();
-
-        worldId.verifyProof(root, signalHash, nullifierHash, externalNullifierHash, proof);
 
         nullifierHashes[nullifierHash] = true;
 
@@ -226,10 +195,22 @@ contract Election is Initializable {
         _calculateResult();
     }
 
-    ///////////////////////////////////
-    // Private & Internal Functions ///
-    ///////////////////////////////////
+    function addToWhiteList(address[] calldata toAccounts) external {
+        require(isPrivate == true, "The election is not private");
 
+        uint256 length = toAccounts.length;
+        require(length > 0, "Array cannot be empty");
+        require(length <= 100, "Batch too large");
+
+        for (uint256 i = 0; i < length;) {
+            isWhitelisted[toAccounts[i]] = true;
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    // internal functions
     function _getTotalVotes() internal view returns (bytes memory) {
         bytes memory payload = abi.encodeWithSignature("getVotes()");
 
@@ -251,10 +232,7 @@ contract Election is Initializable {
         isElectionEnded = true;
     }
 
-    ////////////////////////////////////////
-    // Public & External View Functions  ///
-    ////////////////////////////////////////
-
+    // getter functions
     function getCandidateList() external view returns (Candidate[] memory) {
         return candidates;
     }
