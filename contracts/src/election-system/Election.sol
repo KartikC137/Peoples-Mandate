@@ -195,7 +195,8 @@ contract Election is Initializable {
         _endElection();
     }
 
-    function calculateFinalResult() external electionEndedCheck {
+    function calculateFinalResult() external {
+        require(block.timestamp > electionInfo.endTime, "election has not ended");
         emit CalculateFinalResult();
         _calculateResult();
     }

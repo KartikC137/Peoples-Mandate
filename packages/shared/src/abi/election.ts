@@ -193,6 +193,13 @@ export const electionAbi = [
   },
   {
     type: "function",
+    name: "isElectionEnded",
+    inputs: [],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "isPrivate",
     inputs: [],
     outputs: [{ name: "", type: "bool", internalType: "bool" }],

@@ -102,23 +102,23 @@ export function ElectionFactoryProvider({
           orgAddress: orgIdParsed.address,
         });
 
-        // const publicElections = (await publicClient.readContract({
-        //   address: factoryAddress,
-        //   abi: electionFactoryAbi,
-        //   functionName: "publicElections",
-        // })) as Address[];
+        const publicElections = (await publicClient.readContract({
+          address: factoryAddress,
+          abi: electionFactoryAbi,
+          functionName: "getPublicElections",
+        })) as Address[];
 
-        // // check if the account is whitelisted, and keep only those ones
-        // const privateElections = (await publicClient.readContract({
-        //   address: factoryAddress,
-        //   abi: electionFactoryAbi,
-        //   functionName: "privateElections",
-        // })) as Address[];
+        // check if the account is whitelisted, and keep only those ones
+        const privateElections = (await publicClient.readContract({
+          address: factoryAddress,
+          abi: electionFactoryAbi,
+          functionName: "getPrivateElections",
+        })) as Address[];
 
-        // setElections({
-        //   public: publicElections,
-        //   private: privateElections,
-        // });
+        setElections({
+          public: publicElections,
+          private: privateElections,
+        });
       } catch (err) {
         console.error("Election factory context error", err);
         setContextError("unknown error occured");

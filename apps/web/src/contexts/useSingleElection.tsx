@@ -102,13 +102,13 @@ export default function useFetchSingleElection(address: Address) {
           }) as Promise<bigint>,
         ]);
 
-        let winnersList: number[] | null = null;
+        let winnersList: bigint[] | null = null;
         if (isResultDeclared) {
           winnersList = (await publicClient.readContract({
             address,
             abi: electionAbi,
             functionName: "getWinnersList",
-          })) as number[];
+          })) as bigint[];
         }
 
         setElectionDetails({

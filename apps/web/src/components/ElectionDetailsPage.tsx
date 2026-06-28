@@ -17,16 +17,6 @@ import { decodeEventLog } from "viem";
 import { bigintToDateWithTimeStamp } from "@/lib/util/helpers";
 import ElectionClock from "./ElectionClock";
 
-export const mockElections = {
-  electionId: 1,
-  creator: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
-  name: "Board of Directors Q3 2026",
-  description:
-    "Annual election to appoint the new executive board of directors for the organization's next fiscal cycle. r the organization's next fiscal cycle.",
-  startTime: new Date("2026-06-25T00:00:00Z"),
-  endTime: new Date("2026-06-30T23:59:59Z"),
-};
-
 export default function ElectionDetails({
   electionAddress,
 }: {
@@ -66,6 +56,8 @@ export default function ElectionDetails({
   const isElectionInactive =
     electionDetails.endTime < new Date() ||
     electionDetails.startTime > new Date();
+
+  const isAdmin = activeAccount === electionDetails.owner.toLowerCase();
 
   async function handleUserVote() {
     setIsVoting(true);
@@ -157,6 +149,43 @@ export default function ElectionDetails({
     }
   }
 
+  async function calculateResult() {
+    if (!walletClient) return;
+
+    try {
+      const txHash = await walletClient.writeContract({
+        abi: electionAbi,
+        address: electionAddress,
+        functionName: "calculateFinalResult",
+        account: activeAccount,
+        chain: defaultChain,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+      console.log("result receipt", receipt);
+      for (const log of receipt.logs) {
+        try {
+          const decodedLog = decodeEventLog({
+            abi: electionAbi,
+            data: log.data,
+            topics: log.topics,
+          });
+
+          if (decodedLog.eventName === "CalculateFinalResult") {
+            // @ts-ignore - mapping viem inferred types
+            console.log("calcultate success, see  winner list");
+            break;
+          }
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.error("calc result ", err);
+    } finally {
+      await fetchElectionData(electionAddress);
+    }
+  }
+
   return (
     <div className=" p-4 absolute top-30 bottom-6 left-6 right-6 flex flex-col gap-y-3">
       <div className="grid grid-cols-[4fr_1fr] gap-x-2">
@@ -200,25 +229,37 @@ export default function ElectionDetails({
       <div className="flex items-center mt-3 text-5xl text-orange-700">
         Candidates ({electionDetails.candidateList.length})
         {electionDetails.hasVoted ? (
-          <span className="ml-2 text-2xl font-bold text-orange-50 bg-orange-500 rounded-full p-2">
+          <span className="ml-2 text-2xl font-bold text-orange-50 bg-orange-500 rounded-full px-4 py-2 border-2">
             VOTED
           </span>
         ) : (
-          <Button
-            isLoading={isVoting}
-            loadingText="Voting"
-            disabled={isElectionInactive}
-            onClick={() => handleUserVote()}
-            className="shadow-lg shadow-green-700/40 hover:shadow-sm border-green-700 border-4 hover:border-green-500 text-2xl font-bold ml-2 text-green-50 bg-green-700 px-4 py-2 rounded-full"
-          >
-            {selectedCandidateId !== null ? "VOTE" : "SELECT CANDIDATE"}
-          </Button>
+          isElectionInactive ||
+          (electionDetails.isResultDeclared && (
+            <Button
+              isLoading={isVoting}
+              loadingText="Voting"
+              onClick={() => handleUserVote()}
+              className="shadow-lg shadow-green-700/40 hover:shadow-sm border-green-700 border-4 hover:border-green-500 text-2xl font-bold ml-2 text-green-50 bg-green-700 px-4 py-2 rounded-full"
+            >
+              {selectedCandidateId !== null ? "VOTE" : "SELECT CANDIDATE"}
+            </Button>
+          ))
         )}
         {error && (
           <span className="ml-2 text-2xl font-bold text-orange-50 bg-red-600 px-4 rounded-full py-2">
             Error: {error}
           </span>
         )}
+        {isAdmin &&
+          electionDetails.endTime < new Date() &&
+          !electionDetails.isResultDeclared && (
+            <Button
+              onClick={() => calculateResult()}
+              className="shadow-lg shadow-green-700/40 hover:shadow-sm border-green-700 border-2 hover:border-green-500 text-2xl font-bold ml-2 text-green-50 bg-green-700 px-4 py-2 rounded-full"
+            >
+              CALCULATE RESULTS
+            </Button>
+          )}
       </div>
       <div
         className={`h-full overflow-scroll rounded-lg border border-orange-600/40 shadow-sm shadow-orange-500/60  `}
@@ -226,12 +267,14 @@ export default function ElectionDetails({
         <div className=" flex flex-col gap-y-5 p-5">
           {electionDetails.candidateList.map((c) => (
             <div key={c.candidateId}>
-              {/* Optional: you can make the whole div clickable by adding an onClick handler here too */}
               <div
                 className={` flex justify-between flex-row gap-x-5 p-2 pr-5 border-2 rounded-lg text-4xl transition-colors ${!electionDetails.hasVoted && !isElectionInactive && " cursor-pointer hover:bg-orange-100 hover:border-orange-500 hover:border-2"} ${
-                  selectedCandidateId === Number(c.candidateId)
-                    ? "bg-orange-200 border-orange-500 text-orange-800"
-                    : "bg-orange-50 border-transparent text-orange-700"
+                  electionDetails.isResultDeclared &&
+                  (electionDetails.winnersList as bigint[])[0] === c.candidateId
+                    ? "bg-green-500 text-white font-bold"
+                    : selectedCandidateId === Number(c.candidateId)
+                      ? "bg-orange-200 border-orange-500 text-orange-800"
+                      : "bg-orange-50 border-transparent text-orange-700"
                 }`}
                 onClick={() =>
                   !isElectionInactive &&

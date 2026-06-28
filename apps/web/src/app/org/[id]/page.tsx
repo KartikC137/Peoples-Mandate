@@ -3,6 +3,7 @@
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Toggle from "@/components/ui/Toggle";
+import { useFactory } from "@/contexts/ElectionFactoryContext";
 import { nothingToShowStyle } from "@/lib/commonStyles";
 import { useState } from "react";
 
@@ -16,7 +17,6 @@ export interface ElectionInfo {
 }
 
 // placeholder
-export const emockElections = [];
 export const mockElections: ElectionInfo[] = [
   {
     electionId: 1,
@@ -69,7 +69,7 @@ export default function OrgHomePage() {
   const [searchString, setSearchString] = useState<string>("");
   const [sortBy, setSortBy] = useState<"CREATED" | "UPDATED">("UPDATED");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-
+  const { publicElections, privateElections } = useFactory();
   const [filtersIsPrivate, setFiltersIsPrivate] = useState<boolean>(false);
 
   return (

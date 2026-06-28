@@ -92,7 +92,7 @@ export type ElectionDetails = {
   createdAt: Date;
   isResultDeclared: boolean;
   isAccountInWhiteList: boolean;
-  winnersList: number[] | null;
+  winnersList: bigint[] | null;
   isPrivate: boolean;
   id: number;
   startTime: Date;
